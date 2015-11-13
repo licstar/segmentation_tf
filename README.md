@@ -1,0 +1,2 @@
+# segmentation_tf
+用TensorFlow实现的最朴素的神经网络分词器
