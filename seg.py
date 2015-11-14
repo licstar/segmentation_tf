@@ -2,6 +2,7 @@
 import tensorflow as tf
 import time
 import math
+import sys
 import numpy as np
 from datetime import datetime
 
@@ -119,7 +120,7 @@ def main(_):
   valid = DataSet("seg_valid.txt", window_size, vocab, class_size)
   test = DataSet("seg_test.txt", window_size, vocab, class_size)
 
-  print len(train.get_data())
+  data_size = len(train.get_data())
 
   #所有变量
   embeddings = tf.Variable(tf.random_uniform([len(vocab), vec_size], 
@@ -140,7 +141,7 @@ def main(_):
   x = tf.reshape(ids_embedding, [-1, vec_size * window_size])
   h = tf.tanh(tf.matmul(x, W1) + b1)
   y = tf.nn.softmax(tf.matmul(h, W2) + b2)
-  cross_entropy = -tf.reduce_sum(y_*tf.log(y))
+  cross_entropy = -tf.reduce_mean(y_*tf.log(y))
 
   #调试信息
   tf.histogram_summary('x', x)
@@ -159,7 +160,7 @@ def main(_):
     train_step = tf.train.GradientDescentOptimizer(0.01).minimize(cross_entropy)
 
     summary_op = tf.merge_all_summaries()
-    summary_writer = tf.train.SummaryWriter("/tmp/seg", graph_def=sess.graph_def)
+    summary_writer = tf.train.SummaryWriter(("/tmp/seg/%d" % batch_size), graph_def=sess.graph_def)
     
     duration_total = 0
     batch_count = 0
@@ -174,9 +175,11 @@ def main(_):
         duration_total += time.time() - start_time
         batch_count += 1
 
-        if step % 1000 == 0: #记录log
+        #记录log，一个epoch记录10次
+        if step % (data_size/(batch_size*10)) == 0:
           summary_str = sess.run(summary_op, feed_dict=data_now)
-          summary_writer.add_summary(summary_str, step)
+          summary_writer.add_summary(summary_str, 
+            step / (data_size/(batch_size*10)))
 
         if step % 10000 == 0: #评测、屏幕输出
           correct_prediction = tf.equal(tf.argmax(y,1), tf.argmax(y_,1))
@@ -196,6 +199,7 @@ def main(_):
           print (format_str % (datetime.now(), step, train.get_epoch(),
                   loss, train_acc*100, valid_acc*100, test_acc*100,
                   examples_per_sec, sec_per_batch))
+          sys.stdout.flush()
 
 if __name__ == '__main__':
   tf.app.run()
