@@ -131,44 +131,49 @@ if __name__ == "__main__":
   h = tf.tanh(tf.matmul(x, W1) + b1)
   y = tf.nn.softmax(tf.matmul(h, W2) + b2)
   cross_entropy = -tf.reduce_sum(y_*tf.log(y))
-
+  tf.scalar_summary('cross_entropy', cross_entropy)
   #tf.histogram_summary('cross_entropy', cross_entropy)
   #cross_entropy = loss(logits, y_, batch_size, class_size)
-
+  summary_op = tf.merge_all_summaries()
 
   train_step = tf.train.GradientDescentOptimizer(0.01).minimize(cross_entropy)
 
   
+  with tf.Session() as sess:
+    sess.run(tf.initialize_all_variables())
+    #tf.train.start_queue_runners(sess=sess)
 
-  sess = tf.Session()
-  sess.run(tf.initialize_all_variables())
-  #tf.train.start_queue_runners(sess=sess)
+    summary_writer = tf.train.SummaryWriter("/tmp/seg", graph_def=sess.graph_def)
+    
 
-  summary_writer = tf.train.SummaryWriter("/tmp/seg", graph_def=sess.graph_def)
+    for step in xrange(10000000):
+        start_time = time.time()
+        batch_data, batch_label = get_batch(data_train, label_train, batch_size)
+        #print tf.convert_to_tensor(batch_data).get_shape().as_list()
+        #print batch_label
+        data_now = {ids: batch_data, y_: batch_label}
+        _, loss = sess.run([train_step, cross_entropy], feed_dict=data_now)
 
-  for step in xrange(10000000):
-      start_time = time.time()
-      batch_data, batch_label = get_batch(data_train, label_train, batch_size)
-      #print tf.convert_to_tensor(batch_data).get_shape().as_list()
-      train_step.run(session=sess, feed_dict={ids: batch_data, y_: batch_label})
+        if step % 1000 == 0:
+          summary_str = sess.run(summary_op, feed_dict=data_now)
+          summary_writer.add_summary(summary_str, step)
+          
+        if step % 10000 == 0: #一次扫描结束
+          correct_prediction = tf.equal(tf.argmax(y,1), tf.argmax(y_,1))
+          accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
+          #loss = cross_entropy.eval(session=sess, feed_dict={ids: data_train, y_: label_train})
+          train_acc = sess.run(accuracy, feed_dict={ids: data_train, y_: label_train})
+          valid_acc = sess.run(accuracy, feed_dict={ids: data_valid, y_: label_valid})
+          test_acc = sess.run(accuracy, feed_dict={ids: data_test, y_: label_test})
+          #_, loss_value = sess.run([train_op, loss])
 
-      if step % 10000 == 0: #一次扫描结束
-        correct_prediction = tf.equal(tf.argmax(y,1), tf.argmax(y_,1))
-        accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
-        loss = cross_entropy.eval(session=sess, feed_dict={ids: data_train, y_: label_train})
-        train_acc = accuracy.eval(session=sess, feed_dict={ids: data_train, y_: label_train})
-        valid_acc = accuracy.eval(session=sess, feed_dict={ids: data_valid, y_: label_valid})
-        test_acc = accuracy.eval(session=sess, feed_dict={ids: data_test, y_: label_test})
-        #_, loss_value = sess.run([train_op, loss])
+          duration = time.time() - start_time
+          examples_per_sec = batch_size / float(duration)
+          sec_per_batch = float(duration)
 
-        duration = time.time() - start_time
-        examples_per_sec = batch_size / float(duration)
-        sec_per_batch = float(duration)
+          format_str = ('%s: step %d, loss = %.2f %.2f %.2f %.2f (%.1f examples/sec; %.3f '
+                          'sec/batch)')
+          print (format_str % (datetime.now(), step, loss, train_acc, valid_acc, test_acc,
+                                 examples_per_sec, sec_per_batch))
 
-        format_str = ('%s: step %d, loss = %.2f %.2f %.2f %.2f (%.1f examples/sec; %.3f '
-                        'sec/batch)')
-        print (format_str % (datetime.now(), step, loss, train_acc, valid_acc, test_acc,
-                               examples_per_sec, sec_per_batch))
-
-        #summary_str = sess.run(tf.merge_all_summaries())
-        #summary_writer.add_summary(summary_str, step)
+          
