@@ -141,8 +141,11 @@ def main(_):
   x = tf.reshape(ids_embedding, [-1, vec_size * window_size])
   h = tf.tanh(tf.matmul(x, W1) + b1)
   y = tf.nn.softmax(tf.matmul(h, W2) + b2)
-  cross_entropy = -tf.reduce_mean(y_*tf.log(y))
+  cross_entropy = -tf.reduce_sum(y_*tf.log(y))
+  train_step = tf.train.GradientDescentOptimizer(0.01).minimize(cross_entropy)
 
+  #其它用于记录的指标
+  cross_entropy_mean = -tf.reduce_mean(y_*tf.log(y))
   correct_prediction = tf.equal(tf.argmax(y,1), tf.argmax(y_,1))
   accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
 
@@ -155,17 +158,15 @@ def main(_):
   tf.histogram_summary('W2', W2)
   tf.histogram_summary('b1', b1)
   tf.histogram_summary('b2', b2)
-  tf.scalar_summary('cross_entropy', cross_entropy)
+  tf.scalar_summary('cross_entropy', cross_entropy_mean)
   tf.scalar_summary('accuracy', accuracy)
 
 
   with tf.Session() as sess:
     sess.run(tf.initialize_all_variables())
     
-    train_step = tf.train.GradientDescentOptimizer(0.01).minimize(cross_entropy)
-
     summary_op = tf.merge_all_summaries()
-    summary_writer = tf.train.SummaryWriter(("/tmp/seg2/%d" % batch_size), graph_def=sess.graph_def)
+    summary_writer = tf.train.SummaryWriter(("/tmp/seg3/%d" % batch_size), graph_def=sess.graph_def)
     
     duration_total = 0
     batch_count = 0
@@ -178,14 +179,14 @@ def main(_):
 
         batch_data, batch_label = train.next_batch(batch_size)
         data_now = {ids: batch_data, y_: batch_label}
-        _, loss = sess.run([train_step, cross_entropy], feed_dict=data_now)
+        sess.run([train_step], feed_dict=data_now)
 
         duration_total += time.time() - start_time
         batch_count += 1
 
         #记录log，一个epoch记录10次
         if step % (data_size/(batch_size*10)) == 0:
-          train_acc = sess.run(accuracy, feed_dict={ids: train.get_data(), y_: train.get_label()})
+          train_acc, loss = sess.run([accuracy, cross_entropy_mean], feed_dict={ids: train.get_data(), y_: train.get_label()})
           valid_acc = sess.run(accuracy, feed_dict={ids: valid.get_data(), y_: valid.get_label()})
           test_acc = sess.run(accuracy, feed_dict={ids: test.get_data(), y_: test.get_label()})
           
