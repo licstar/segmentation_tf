@@ -143,6 +143,10 @@ def main(_):
   y = tf.nn.softmax(tf.matmul(h, W2) + b2)
   cross_entropy = -tf.reduce_mean(y_*tf.log(y))
 
+  correct_prediction = tf.equal(tf.argmax(y,1), tf.argmax(y_,1))
+  accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
+
+
   #调试信息
   tf.histogram_summary('x', x)
   tf.histogram_summary('h', h)
@@ -152,6 +156,7 @@ def main(_):
   tf.histogram_summary('b1', b1)
   tf.histogram_summary('b2', b2)
   tf.scalar_summary('cross_entropy', cross_entropy)
+  tf.scalar_summary('accuracy', accuracy)
 
 
   with tf.Session() as sess:
@@ -160,12 +165,15 @@ def main(_):
     train_step = tf.train.GradientDescentOptimizer(0.01).minimize(cross_entropy)
 
     summary_op = tf.merge_all_summaries()
-    summary_writer = tf.train.SummaryWriter(("/tmp/seg/%d" % batch_size), graph_def=sess.graph_def)
+    summary_writer = tf.train.SummaryWriter(("/tmp/seg2/%d" % batch_size), graph_def=sess.graph_def)
     
     duration_total = 0
     batch_count = 0
 
-    for step in xrange(10000000):
+    #for step in xrange(10000000):
+    step = 0
+    while True:
+
         start_time = time.time()
 
         batch_data, batch_label = train.next_batch(batch_size)
@@ -177,14 +185,6 @@ def main(_):
 
         #记录log，一个epoch记录10次
         if step % (data_size/(batch_size*10)) == 0:
-          summary_str = sess.run(summary_op, feed_dict=data_now)
-          summary_writer.add_summary(summary_str, 
-            step / (data_size/(batch_size*10)))
-
-        if step % 10000 == 0: #评测、屏幕输出
-          correct_prediction = tf.equal(tf.argmax(y,1), tf.argmax(y_,1))
-          accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
-          
           train_acc = sess.run(accuracy, feed_dict={ids: train.get_data(), y_: train.get_label()})
           valid_acc = sess.run(accuracy, feed_dict={ids: valid.get_data(), y_: valid.get_label()})
           test_acc = sess.run(accuracy, feed_dict={ids: test.get_data(), y_: test.get_label()})
@@ -200,6 +200,12 @@ def main(_):
                   loss, train_acc*100, valid_acc*100, test_acc*100,
                   examples_per_sec, sec_per_batch))
           sys.stdout.flush()
+
+          summary_str = sess.run(summary_op, feed_dict={ids: train.get_data(), y_: train.get_label()})
+          summary_writer.add_summary(summary_str, 
+            step / (data_size/(batch_size*10)))
+
+        step += 1
 
 if __name__ == '__main__':
   tf.app.run()
